@@ -44,8 +44,8 @@ module Language.Feather.Pretty.CST where
   prettyPattern :: Pattern -> P.Doc ann
   prettyPattern (PVariable v) = P.pretty v
   prettyPattern (PWildcard) = P.pretty "_"
-  prettyPattern (PPair p1 p2) = P.parens $ located prettyPattern p1 <> P.comma P.<+> located prettyPattern p2
   prettyPattern (PLiteral l) = P.pretty $ show l
+  prettyPattern (PApp e1 e2) = P.parens $ located prettyPattern e1 P.<+> located prettyPattern e2
 
   instance Show Assoc where
     show = \case
@@ -64,7 +64,6 @@ module Language.Feather.Pretty.CST where
   prettyDeclaration (DGeneric s) = P.pretty ("'" <> s) 
   prettyDeclaration (DApp (DApp (DId "->") a) b) = P.parens $ prettyDeclaration a P.<+> P.pretty "->" P.<+> prettyDeclaration b
   prettyDeclaration (DApp n x) = P.parens $ prettyDeclaration n P.<+> prettyDeclaration x
-  prettyDeclaration (DPair x y) = P.parens $ prettyDeclaration x <> P.comma P.<+> prettyDeclaration y
 
   prettyLetExpression :: LetExpression -> P.Doc ann
   prettyLetExpression = \case
