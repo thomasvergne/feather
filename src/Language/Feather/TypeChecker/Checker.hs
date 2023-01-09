@@ -210,7 +210,7 @@ module Language.Feather.TypeChecker.Checker where
   checkLiteral :: MonadChecker m => Literal -> m Type
   checkLiteral (IntLit _) = return Int
   checkLiteral (FloatLit _) = return Float
-  checkLiteral (StringLit _) = return (TApp (TId "[]") Char)
+  checkLiteral (StringLit _) = return (TApp (TId "List") Char)
   checkLiteral (CharLit _) = return Char
 
   functions :: Environment
@@ -224,7 +224,7 @@ module Language.Feather.TypeChecker.Checker where
       (">", Forall [] (Int `tArrow` (Int `tArrow` Bool))),
       ("&&", Forall [] (Bool `tArrow` (Bool `tArrow` Bool))),
       ("||", Forall [] (Bool `tArrow` (Bool `tArrow` Bool))),
-      ("error", Forall [0] (TApp (TId "[]") Char `tArrow` TVar 0)),
+      ("error", Forall [0] (TApp (TId "List") Char `tArrow` TVar 0)),
       ("+", Forall [0] $ TVar 0 `tArrow` (TVar 0 `tArrow` TVar 0)),
       ("-", Forall [0] $ TVar 0 `tArrow` (TVar 0 `tArrow` TVar 0)),
       ("*", Forall [0] $ TVar 0 `tArrow` (TVar 0 `tArrow` TVar 0)),
