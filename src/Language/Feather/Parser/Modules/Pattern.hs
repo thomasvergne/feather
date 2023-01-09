@@ -17,7 +17,10 @@ module Language.Feather.Parser.Modules.Pattern where
             ops <- gets L.infixOperators
             return $ [ map (\(op, assoc) -> E.Infix (L.reservedOp op 
               >> return (\x@(_ :>: (s, _)) y@(_ :>: (_, e)) -> 
-                PApp (PApp (PVariable op :>: (s, e)) x :>: (s, e)) y :>: (s, e))) assoc) ops ]
+                PApp (PApp (PVariable op :>: (s, e)) x :>: (s, e)) y :>: (s, e))) assoc) ops,
+                       [ E.Infix 
+                          (return (\x@(_ :>: (s, _)) y@(_ :>: (_, e)) -> PApp x y :>: (s, e)))
+                          E.AssocLeft ] ]
 
   term :: Monad m => L.Parser m (Located Pattern)
   term =  L.locate (L.identifier <&> PVariable)
