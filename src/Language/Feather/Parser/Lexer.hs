@@ -2,9 +2,9 @@ module Language.Feather.Parser.Lexer where
   import Text.Parsec.Token ( GenTokenParser )
   import Text.Parsec ( alphaNum, letter, ParsecT, oneOf, getPosition )
   import Language.Feather.CST.Literal ( Located(..), Position )
-  import Text.Parsec.Expr
-  import Control.Monad.State
-  import Control.Monad.Identity
+  import Text.Parsec.Expr ( Assoc )
+  import Control.Monad.State ( StateT, evalStateT )
+  import Control.Monad.Identity ( Identity(runIdentity) )
 
   import qualified Text.Parsec.Token as Token
 
@@ -33,10 +33,10 @@ module Language.Feather.Parser.Lexer where
               , Token.opLetter        = oneOf "+-*/%<>=|"
               , Token.identLetter     = alphaNum
               , Token.reservedNames   = ["let", "where", "in", "do", "fun", "if", "then", "else", "match", "with"]
-              , Token.reservedOpNames = ["+", "-", "*", "/", "%", "=", "|", ">", "<", "!", "$", "#", "&", "@", "^", ".", "?", ":"] }
+              , Token.reservedOpNames = ["+", "-", "*", "/", "%", "=", "|", ">", "<", "!", "$", "#", "&", "@", "^", ".", "?", ":", ","] }
 
   operators :: String
-  operators = "<>!#$%&.?@^|~:-+*/="
+  operators = "<>!#$%&.?@^|~:-+*/=,"
 
   lexer :: Monad m => GenTokenParser String u m
   lexer = Token.makeTokenParser languageDef

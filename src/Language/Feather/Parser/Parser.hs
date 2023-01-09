@@ -50,7 +50,7 @@ module Language.Feather.Parser.Parser where
   structure = do
     s <- P.getPosition
     L.reserved "struct"
-    name <- L.identifier
+    name <- L.identifier <|> L.parens operators
     tyArgs <- P.many (P.char '\'' *> L.identifier)
     fields <- some $ do
       L.reservedOp "|"
