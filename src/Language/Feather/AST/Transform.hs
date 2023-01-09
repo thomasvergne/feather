@@ -1,9 +1,10 @@
 module Language.Feather.AST.Transform where
+  import Language.Feather.CST.Literal ( Located(..) )
+  import Language.Feather.Parser.Lexer ( getLoc )
+  import Data.Bifunctor ( Bifunctor(second) )
+  
   import qualified Language.Feather.CST.Expression as C
   import qualified Language.Feather.AST.Expression as A
-  import Language.Feather.CST.Literal
-  import Language.Feather.Parser.Lexer
-  import Data.Bifunctor
 
   removeNilExpressions :: Located A.Expression -> Located A.Expression
   removeNilExpressions (A.ELetIn "_" (A.EVariable "nil" :>: _) e2 :>: _) = removeNilExpressions e2
@@ -41,11 +42,11 @@ module Language.Feather.AST.Transform where
   transformLetExpression (C.LetAbsExpression v vs e w) 
     = Right (v, abs')
     where e'   = transformExpression e
-          abs' = foldl (\e'' v' -> A.EAbstraction v' e'' :>: getLoc e) (transformWhereClause w e') vs
+          abs' = foldl (\e'' v' -> A.EAbstraction v' e'' :>: getLoc e) (transformWhereClause w e') $ reverse vs
   transformLetExpression (C.LetAbsClauseExpression name args gc wc) 
     = Right (name, abs')
     where gc'  = transformGuardClause gc
-          abs' = foldl (\e' v -> A.EAbstraction v e' :>: getLoc gc') (transformWhereClause wc gc') args 
+          abs' = foldl (\e' v -> A.EAbstraction v e' :>: getLoc gc') (transformWhereClause wc gc') $ reverse args 
   transformLetExpression (C.LetExpression v e) = Right (v, transformExpression e)
   transformLetExpression (C.LetPatternExpression pat e) = Left (pat, transformExpression e)
 
