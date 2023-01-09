@@ -1,5 +1,5 @@
 module Language.Feather.Parser.Modules.LetExpressions where
-  import Language.Feather.CST.Expression ( Expression(..), LetExpression(..) )
+  import Language.Feather.CST.Expression ( Expression(..), LetExpression(..), Pattern(..) )
   import Control.Applicative ( Alternative(some, (<|>)) )
   import Language.Feather.CST.Literal ( Located((:>:)) )
   import Language.Feather.Parser.Modules.Pattern ( patternExpression )
@@ -11,19 +11,18 @@ module Language.Feather.Parser.Modules.LetExpressions where
   letExpression :: Monad m => L.Feather m Expression -> L.Parser m LetExpression
   letExpression expression =  P.try (letPatternExpression expression)
                           <|> P.try (letInfixAbsExpression expression)
-                          <|> P.try (letInfixAbsClauseExpression expression)
                           <|> P.try (letAbsExpression expression)
+                          <|> P.try (letInfixAbsClauseExpression expression)
                           <|> P.try (letAbsClauseExpression expression)
-                          <|> letExpression' expression
+                          <|> P.try (letExpression' expression)
 
   letExpression' :: Monad m => L.Feather m Expression -> L.Parser m LetExpression
   letExpression' expr = LetExpression <$> (L.identifier <|> L.parens operators) <*> (L.reservedOp "=" *> expr)
 
   letInfixAbsExpression :: Monad m => L.Feather m Expression -> L.Parser m LetExpression
   letInfixAbsExpression expr = do
-    arg1 <- L.identifier <|> L.parens operators
-    name <- operators
-    arg2 <- L.identifier <|> L.parens operators
+    (arg1, name) <- P.try $ (,) <$> L.identifier <*> operators
+    arg2 <- L.identifier
     L.reservedOp "="
     body <- expr
     whereClause <- P.option [] (L.reserved "where" *> some (L.locate $ letExpression' expr))
@@ -31,9 +30,8 @@ module Language.Feather.Parser.Modules.LetExpressions where
 
   letInfixAbsClauseExpression :: Monad m => L.Feather m Expression -> L.Parser m LetExpression
   letInfixAbsClauseExpression expr = do
-    arg1 <- L.identifier <|> L.parens operators
-    name <- operators
-    arg2 <- L.identifier <|> L.parens operators
+    (arg1, name) <- P.try $ (,) <$> L.identifier <*> operators
+    arg2 <- L.identifier
     clauses <- some (do
       s <- P.getPosition
       L.reservedOp "|"
@@ -71,7 +69,7 @@ module Language.Feather.Parser.Modules.LetExpressions where
 
   letPatternExpression :: Monad m => L.Feather m Expression -> L.Parser m LetExpression
   letPatternExpression expr = do
-    name <- patternExpression
+    name <- L.parens patternExpression <|> L.locate (L.reservedOp "_" *> return PWildcard)
     L.reservedOp "="
     body <- expr
     return $ LetPatternExpression name body
