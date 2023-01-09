@@ -142,7 +142,7 @@ module Language.Feather.TypeChecker.Checker where
             return (apply s4 t, s4)
           Left e -> E.throwError (e, Nothing, pos)
   checkExpression (EStructure _ generics fields expr :>: _) = do
-    generics' <- M.fromList <$> MO.zipWithM (\_ n -> (n,) <$> fresh) [0..] generics
+    generics' <- M.fromList <$> mapM ((<$> fresh) . (,)) generics
     let fields' = M.fromList $ map (\(n, e) -> (n, fromDeclaration e generics')) fields
     env <- RWS.ask
     let env' = M.map (generalize env) fields'
