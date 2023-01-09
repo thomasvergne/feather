@@ -1,26 +1,25 @@
 module Language.Feather.Parser.Modules.Pattern where
   import Language.Feather.CST.Expression ( Pattern(..) )
   import Control.Applicative ( Alternative((<|>)) )
+  import Control.Monad.State ( gets )
   import Language.Feather.CST.Literal ( Located((:>:)) )
   import Language.Feather.Parser.Modules.Literal ( literal' )
   import Data.Functor ( (<&>) )
 
+  import qualified Text.Parsec.Expr as E  
   import qualified Language.Feather.Parser.Lexer as L
-  import qualified Text.Parsec as P
 
   patternExpression :: Monad m => L.Parser m (Located Pattern)
-  patternExpression =  L.locate (L.identifier <&> PVariable)
-                   <|> patternPair
-                   <|> L.locate (L.reservedOp "_" *> return PWildcard)
-                   <|> L.locate (literal' <&> PLiteral)
+  patternExpression = do
+    table' <- table
+    E.buildExpressionParser table' term
+    where table = do
+            ops <- gets L.infixOperators
+            return $ [ map (\(op, assoc) -> E.Infix (L.reservedOp op 
+              >> return (\x@(_ :>: (s, _)) y@(_ :>: (_, e)) -> 
+                PApp (PApp (PVariable op :>: (s, e)) x :>: (s, e)) y :>: (s, e))) assoc) ops ]
 
-    
-  patternPair :: Monad m => L.Feather m Pattern
-  patternPair = do
-    s <- P.getPosition
-    ps <- L.parens $ L.commaSep patternExpression
-    e <- P.getPosition
-    case ps of
-      [p] -> return $ p
-      (x:xs) -> return $ foldl (\a b -> PPair a b :>: (s, e)) x xs
-      [] -> return $ PWildcard :>: (s, e)
+  term :: Monad m => L.Parser m (Located Pattern)
+  term =  L.locate (L.identifier <&> PVariable)
+      <|> L.locate (L.reservedOp "_" *> return PWildcard)
+      <|> L.locate (literal' <&> PLiteral)
