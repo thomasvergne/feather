@@ -1,0 +1,32 @@
+infix left (>>);
+infix right (:);
+let x >> y = let () = x in y;
+
+let factorial n
+  | n < 0 = error "n must be non-negative"
+  | n == 0 = 1
+  | otherwise = n * factorial (n - 1);
+
+factorial 58 >> factorial 58;
+
+struct list 'a 
+  | Nil : List 'a
+  | (:) : 'a -> List 'a -> List 'a;
+
+(5 : Nil);
+
+let fib n = match n with
+  | 0 = 0
+  | 1 = 1
+  | n = fib (n - 1) + fib (n - 2);
+
+let regime poids taille
+  | imc < 16.5 = "dénutrition"
+  | imc < 18.5 = "maigreur"
+  | imc < 25 = "corpulence normale"
+  | imc < 30 = "surpoids"
+  | imc < 35 = "obésité modérée"
+  | imc < 40 = "obésité sévère"
+  | otherwise = "obésité morbide"
+  where imc = poids / (taille * taille)
+in regime 80 1.80;
