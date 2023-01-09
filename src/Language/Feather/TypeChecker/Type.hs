@@ -15,7 +15,7 @@ module Language.Feather.TypeChecker.Type where
     show Char = "char"
     show (TId s) = s
     show (TApp (TApp (TId "->") a) b) = "(" ++ show a ++ " -> " ++ show b ++ ")"
-    show (TApp (TApp (TId "(,)") a) b) = "(" ++ show a ++ ", " ++ show b ++ ")"
+    show (TApp (TApp (TId ",") a) b) = "(" ++ show a ++ ", " ++ show b ++ ")"
     show (TApp (TId "[]") Char) = "string"
     show (TApp (TId "[]") a) = "[" ++ show a ++ "]"
     show (TApp a b) = "(" ++ show a ++ " " ++ show b ++ ")"

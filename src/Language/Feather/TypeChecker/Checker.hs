@@ -20,6 +20,7 @@ module Language.Feather.TypeChecker.Checker where
   import qualified Control.Monad.Except as E
   import qualified Control.Monad as MO
   import qualified Data.Set as S
+  import Debug.Trace
 
   generalize :: ReaderEnv -> Type -> Scheme
   generalize env t = Forall vars t
@@ -35,7 +36,7 @@ module Language.Feather.TypeChecker.Checker where
   checkExpression (EPair e1 e2 :>: _) = do
     (t1, s1) <- checkExpression e1
     (t2, s2) <- checkExpression e2
-    return (TApp (TApp (TId "(,)") t1) t2, s1 `compose` s2)
+    return (TApp (TApp (TId ",") t1) t2, s1 `compose` s2)
   checkExpression (EVariable name :>: pos) = do
     (env, cons) <- RWS.ask
     case M.lookup name env of
@@ -72,6 +73,7 @@ module Language.Feather.TypeChecker.Checker where
     t <- fresh
     let env' = M.insert variable' (Forall [] t) env
     (t1, s1) <- RWS.local (`applyTy` env') $ checkExpression e1
+    traceShowM (variable', t1)
     let env'' = M.insert variable' (generalize (env', c) t1) env'
     (t2, s2) <- RWS.local (`applyTy` env'') $ checkExpression e2
     return (t2, s1 `compose` s2)
@@ -87,16 +89,58 @@ module Language.Feather.TypeChecker.Checker where
         case s5 of
           Left err -> E.throwError (err, Nothing, pos)
           Right s5' -> return (apply s5' t2, s1 `compose` s2 `compose` s3 `compose` s4' `compose` s5')
-  checkExpression (ECase e cases :>: pos) = do
-    (ty, s) <- checkExpression e
-    tyv <- fresh
-    (ty', s1) <- checkCases ty (tyv, s) cases
-    s2 <- mgu ty ty'
-    case s2 of
-      Left err -> E.throwError (err, Nothing, pos)
-      Right s3 -> do
-        let s4 = s3 `compose` s1 `compose` s
-        return (apply s4 tyv, s4)
+  checkExpression (ECase expr cases :>: pos) = do
+    (pat_t, s1) <- checkExpression expr
+
+    (sub, res) <- MO.foldM (\(s, acc) (pattern, expr') -> do
+      (t, s', m) <- checkPattern pattern
+      let s2 = s' `compose`  s
+      -- (Type, Substitution, Env, A.TypedExpression)
+      (t', s'') <- RWS.local (`applyTy` m) $ checkExpression expr'
+      let s3 = s'' `compose` s2
+      return (s3, acc ++ [(apply s3 t, apply s3 t', s3)])) (s1, []) cases
+
+    if null res
+      then E.throwError ("No case matches in pattern matching", Nothing, pos)
+      else do
+        let (_, t, _) = head res
+        s <- MO.foldM (\acc (tp, te, s) -> do
+          tmp1 <- mgu t te
+          tmp2 <- mgu tp pat_t
+          let r = compose <$> tmp1 <*> tmp2
+              r' = compose <$> r <*> acc
+            in return $ compose <$> r' <*> pure s) (Right sub) res
+        
+        s2 <- MO.foldM (\acc (tp, te, s') -> do
+          tmp1 <- mgu t te
+          tmp2 <- mgu tp pat_t
+          let r = compose <$> tmp1 <*> tmp2
+              r' = compose <$> r <*> acc
+            in return $ compose <$> r' <*> pure s') (Right sub) $ reverse res
+        let s' = compose <$> s <*> s2
+
+        -- Checking against patterns
+        let tys = map (\(x, _, _) -> case s of
+                    Right s'' -> apply s'' x
+                    Left _ -> x) res
+
+        s'' <- MO.foldM (\acc x -> do
+          tmp <- patUnify x tys
+          return $ compose <$> tmp <*> acc) (s') tys
+
+        -- Checking against bodys
+        let bodys = map (\(_, x, _) -> case s of
+                    Right s''' -> apply s''' x
+                    Left _ -> x) res
+
+        s''' <- MO.foldM (\acc x -> do
+          tmp <- patUnify x bodys
+          return $ compose <$> tmp <*> acc) (s') bodys
+
+        case compose <$> (compose <$> s'' <*> s''') <*> s' of
+          Right s4 -> do
+            return (apply s4 t, s4)
+          Left e -> E.throwError (e, Nothing, pos)
   checkExpression (EStructure _ generics fields expr :>: _) = do
     generics' <- M.fromList <$> MO.zipWithM (\_ n -> (n,) <$> fresh) [0..] generics
     let fields' = M.fromList $ map (\(n, e) -> (n, fromDeclaration e generics')) fields
@@ -104,6 +148,11 @@ module Language.Feather.TypeChecker.Checker where
     let env' = M.map (generalize env) fields'
     RWS.local (`applyCons` env') $ checkExpression expr
     
+  patUnify :: MonadChecker m => Type -> [Type] -> m (Either String Substitution)
+  patUnify x = MO.foldM (\acc y -> do
+    s <- mgu x y
+    return $ compose <$> s <*> acc) (Right M.empty)
+
   unpackType :: Type -> [Type]
   unpackType (TApp (TApp (TId "->") a) b) = b : unpackType a
   unpackType t = [t]
@@ -117,7 +166,6 @@ module Language.Feather.TypeChecker.Checker where
   fromDeclaration DFloat _ = Float
   fromDeclaration (DId n) _ = TId n
   fromDeclaration (DApp d1 d2) generics = TApp (fromDeclaration d1 generics) (fromDeclaration d2 generics)
-  fromDeclaration (DPair d1 d2) generics = TApp (TApp (TId "(,)") (fromDeclaration d1 generics)) (fromDeclaration d2 generics)
   fromDeclaration (DGeneric id') generics = case M.lookup id' generics of
     Just t -> t
     Nothing -> error "Unbound generic"
@@ -135,19 +183,29 @@ module Language.Feather.TypeChecker.Checker where
       Right s5' -> checkCases tyExpr (ty2, s5') cases
 
   checkPattern :: MonadChecker m => Located Pattern -> m (Type, Substitution, Environment)
-  checkPattern (PVariable name :>: _) = do
-    t <- fresh
-    return (t, mempty, M.singleton name (Forall [] t))
   checkPattern (PWildcard :>: _) = do
     t <- fresh
     return (t, mempty, mempty)
-  checkPattern (PPair p1 p2 :>: _) = do
-    (t1, s1, e1) <- checkPattern p1
-    (t2, s2, e2) <- checkPattern p2
-    return (TApp (TApp (TId "()") t1) t2, s1 `compose` s2, e1 `M.union` e2)
+  checkPattern (PVariable name :>: _) = do
+    (_, cons) <- RWS.ask
+    case M.lookup name cons of
+      Just scheme -> do
+        t <- instantiate scheme
+        return (t, mempty, mempty)
+      Nothing -> do
+        t <- fresh
+        return (t, mempty, M.singleton name (Forall [] t))
   checkPattern (PLiteral l :>: _) = do
     t <- checkLiteral l
     return (t, mempty, mempty)
+  checkPattern (PApp p1 p2 :>: pos) = do
+    (t1, s1, env1) <- checkPattern p1
+    (t2, s2, env2) <- RWS.local (`applyTy` env1) $ checkPattern p2
+    t <- fresh
+    s3 <- mgu (apply s2 t1) (t2 `tArrow` t)
+    case s3 of
+      Left err -> E.throwError (err, Nothing, pos)
+      Right s3' -> return (apply s3' t, s1 `compose` s2 `compose` s3', env1 `M.union` env2)
 
   checkLiteral :: MonadChecker m => Literal -> m Type
   checkLiteral (IntLit _) = return Int
