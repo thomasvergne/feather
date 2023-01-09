@@ -2,7 +2,7 @@ module Language.Feather.Parser.Modules.Operators where
   import Language.Feather.CST.Literal ( Located((:>:)) )
   import Language.Feather.CST.Expression ( Expression(..) )
   import Control.Applicative ( Alternative(some) )
-  import Control.Monad.State
+  import Control.Monad.State ( StateT, gets )
 
   import qualified Language.Feather.Parser.Lexer as L
   import qualified Text.Parsec.Expr as E
