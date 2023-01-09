@@ -34,5 +34,5 @@ module Language.Feather.CST.Expression where
   data Pattern
     = PVariable String
     | PWildcard
-    | PPair (Located Pattern) (Located Pattern)
+    | PApp (Located Pattern) (Located Pattern)
     | PLiteral Literal
