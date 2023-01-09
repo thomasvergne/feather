@@ -21,11 +21,11 @@ module Language.Feather.Parser.Modules.Declaration where
                    map (\(op, assoc) -> E.Infix (L.reservedOp op >> return (DApp . DApp (DId op))) assoc) infixOps]
 
   term :: Monad m => L.Parser m Declaration
-  term =  ((P.char '\'' *> L.identifier) <&> DGeneric)
-      <|> P.try ((L.identifier <|> L.parens operators) <&> DId)
-      <|> (L.reserved "float"  $> DFloat)
+  term =  (L.reserved "float"  $> DFloat)
       <|> (L.reserved "int"    $> DInt)
       <|> (L.reserved "string" $> DString)
       <|> (L.reserved "char"   $> DChar)
       <|> (L.reserved "bool"   $> DBool)
+      <|> ((P.char '\'' *> L.identifier) <&> DGeneric)
+      <|> P.try ((L.identifier <|> L.parens operators) <&> DId)
       <|> L.parens declaration
