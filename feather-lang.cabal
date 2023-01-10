@@ -79,6 +79,7 @@ library
 
             Language.Feather.Pretty.CST
             Language.Feather.Pretty.AST
+            Language.Feather.Pretty.Typed
 
             Language.Feather.TypeChecker.Type
             Language.Feather.TypeChecker.Monad
@@ -86,6 +87,8 @@ library
             Language.Feather.TypeChecker.Substitution
             Language.Feather.TypeChecker.Unification
             Language.Feather.TypeChecker.Checker
+            Language.Feather.TypeChecker.Typed
+            Language.Feather.TypeChecker.Modules.InstanceResolver
             
         Data.String.Color
 
