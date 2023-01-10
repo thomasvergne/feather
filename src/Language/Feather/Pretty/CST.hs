@@ -40,6 +40,15 @@ module Language.Feather.Pretty.CST where
     P.<+> P.pretty s 
     P.<+> P.hsep (map P.pretty vs) 
     P.<+> P.align (P.vsep (map (\(n, xs) -> P.pretty "| " <> P.pretty n P.<+> prettyDeclaration xs) cs))
+  prettyExpression (EInherit sups name decl exprs) = P.pretty "inherit" 
+    P.<+> P.hsep (map (\(name', d) -> P.pretty name' P.<+> P.pretty d) sups)
+    P.<+> P.pretty "=>"
+    P.<+> P.pretty name
+    P.<+> prettyDeclaration decl
+    P.<+> P.align (P.vsep (map (\e -> P.pretty "| " <> located prettyLetExpression e) exprs))
+  prettyExpression (EClass name decl decls) = P.pretty "class"
+    P.<+> P.pretty name P.<+> P.pretty decl
+    P.<+> P.align (P.vsep (map (\(n, args, d) -> P.pretty "|" P.<+> P.pretty n P.<+> P.hsep (map P.pretty args) P.<+> prettyDeclaration d) decls))
 
   prettyPattern :: Pattern -> P.Doc ann
   prettyPattern (PVariable v) = P.pretty v
@@ -71,7 +80,7 @@ module Language.Feather.Pretty.CST where
         P.pretty v P.<+> P.hsep (map P.pretty vs) 
                    P.<+> P.pretty "=" 
                    P.<+> located prettyExpression e 
-                   P.<+> P.pretty "\n" <> P.indent 2 (whereClause wc)
+                   P.<+> P.indent 2 (whereClause wc)
     LetAbsClauseExpression v vs gc wc -> 
         P.pretty v P.<+> P.hsep (map P.pretty vs) 
                    P.<+> guardClause gc 
@@ -82,7 +91,7 @@ module Language.Feather.Pretty.CST where
         located prettyPattern pat P.<+> P.pretty "=" P.<+> located prettyExpression e
     where whereClause wc = if length wc == 0
                               then mempty 
-                              else P.pretty "where" P.<+> P.align (P.vsep (map (\(x :>:_) -> prettyWhereClause x) wc))
+                              else P.pretty "\n" <> P.pretty "where" P.<+> P.align (P.vsep (map (\(x :>:_) -> prettyWhereClause x) wc))
           guardClause gc = P.align (P.vsep (map (\(x :>: _) -> prettyGuardClause x) gc))
 
   prettyWhereClause :: LetExpression -> P.Doc ann

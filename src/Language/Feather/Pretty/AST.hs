@@ -21,7 +21,20 @@ module Language.Feather.Pretty.AST where
   prettyExpression (ELetIn l e1 e2) = P.pretty "let" P.<+> P.pretty l P.<+> P.pretty "=" P.<+> located prettyExpression e1 P.<+> P.pretty "\nin" P.<+> located prettyExpression e2
   prettyExpression (EIf e1 e2 e3) = P.pretty "if" P.<+> located prettyExpression e1 P.<+> P.pretty "then" P.<+> located prettyExpression e2 P.<+> P.pretty "else" P.<+> located prettyExpression e3
   prettyExpression (ECase e cs) = P.pretty "case" P.<+> located prettyExpression e P.<+> P.pretty "of" P.<+> P.align (P.vsep (map (\(p, e') -> P.pretty "| " <> located prettyPattern p P.<+> P.pretty "=" P.<+> located prettyExpression e') cs))
-  prettyExpression (EStructure s vs ds e) = P.pretty "struct" P.<+> P.pretty s P.<+> P.pretty vs P.<+> P.pretty "where" P.<+> P.align (P.vsep (map (\(n, d) -> P.pretty n P.<+> P.pretty "=" P.<+> prettyDeclaration d) ds)) P.<+> P.pretty "in" P.<+> located prettyExpression e
+  prettyExpression (EStructure s vs ds e) = P.pretty "struct" P.<+> P.pretty s P.<+> P.hsep (map P.pretty vs) P.<+> P.pretty "where\n" P.<+> P.indent 2 (P.align (P.vsep (map (\(n, d) -> P.pretty n P.<+> P.pretty "=" P.<+> prettyDeclaration d) ds))) P.<+> P.pretty "\nin" P.<+> located prettyExpression e
+  prettyExpression (EClass name ty methods next) = P.pretty "class"
+    P.<+> P.pretty name P.<+> P.pretty ty <> P.pretty "\n"
+    P.<+> (P.indent 2 . P.align . P.vsep) (map (\(n, vs, d) -> P.pretty n P.<+> P.hsep (map P.pretty vs) P.<+> P.pretty ":" P.<+> prettyDeclaration d) methods)
+    P.<+> P.pretty "in" P.<+> located prettyExpression next
+  prettyExpression (EInherit sups name d ds next) =  P.pretty "inherit" 
+    P.<+> P.hsep (map (\(name', d') -> P.pretty name' P.<+> P.pretty d') sups)
+    P.<+> P.pretty "=>"
+    P.<+> P.pretty name
+    P.<+> prettyDeclaration d
+    P.<+> P.align (P.vsep (map (\(n, e) -> P.pretty "|" 
+      P.<+> P.pretty n 
+      P.<+> located prettyExpression e) ds))
+    P.<+> P.pretty "in" P.<+> located prettyExpression next
 
   instance Show Expression where
     show = show . prettyExpression
