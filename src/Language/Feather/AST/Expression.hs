@@ -15,3 +15,5 @@ module Language.Feather.AST.Expression where
     | EIf (Located Expression) (Located Expression) (Located Expression)
     | ECase (Located Expression) [(Located Pattern, Located Expression)]
     | EStructure String [String] [(String, Declaration)] (Located Expression)
+    | EInherit [(String, String)] String Declaration [(String, Located Expression)] (Located Expression)
+    | EClass String String [(String, [String], Declaration)] (Located Expression)

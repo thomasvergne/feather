@@ -2,7 +2,9 @@ module Language.Feather.AST.Transform where
   import Language.Feather.CST.Literal ( Located(..) )
   import Language.Feather.Parser.Lexer ( getLoc )
   import Data.Bifunctor ( Bifunctor(second) )
-  
+  import Language.Feather.TypeChecker.Methods
+  import Data.Either
+
   import qualified Language.Feather.CST.Expression as C
   import qualified Language.Feather.AST.Expression as A
 
@@ -12,6 +14,9 @@ module Language.Feather.AST.Transform where
 
   transformExpressions :: [Located C.Expression] -> Located A.Expression
   transformExpressions [x] = transformExpression x
+  transformExpressions (C.EClass name decl decls :>: p : es) = A.EClass name decl decls (transformExpressions es) :>: p
+  transformExpressions (C.EInherit sups name decl exprs :>: p : es) = A.EInherit sups name decl fields (transformExpressions es) :>: p
+    where fields = map (fromRight (error "Not defined") . transformLetExpression . unLoc) exprs
   transformExpressions (C.EStructure s vs ds :>: p : es) = A.EStructure s vs ds (transformExpressions es) :>: p
   transformExpressions (C.ELet l :>: p : es) = case res of
     Right (name, expr) -> A.ELetIn name expr (transformExpressions es) :>: p
@@ -34,9 +39,8 @@ module Language.Feather.AST.Transform where
     where res = transformLetExpression l
   transformExpression (C.EIf e1 e2 e3 :>: p) = A.EIf (transformExpression e1) (transformExpression e2) (transformExpression e3) :>: p
   transformExpression (C.ELet _ :>: _) = error "transformExpression: let expression not in let-in"
-  transformExpression (C.EInfixDeclaration _ _ :>: p) = A.EVariable "nil" :>: p
   transformExpression (C.ECase e cs :>: p) = A.ECase (transformExpression e) (map (second transformExpression) cs) :>: p
-  transformExpression (C.EStructure _ _ _ :>: p) = A.EVariable "nil" :>: p
+  transformExpression (_ :>: p) = A.EVariable "nil" :>: p
 
   transformLetExpression :: C.LetExpression -> Either (Located C.Pattern, Located A.Expression) (String, Located A.Expression)
   transformLetExpression (C.LetAbsExpression v vs e w) 
