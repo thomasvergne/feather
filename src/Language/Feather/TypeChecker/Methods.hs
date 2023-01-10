@@ -1,8 +1,9 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 module Language.Feather.TypeChecker.Methods where
   import Language.Feather.TypeChecker.Substitution ( Substitution, Types(..) )
-  import Language.Feather.TypeChecker.Type ( Scheme(..), Type(..) )
+  import Language.Feather.TypeChecker.Type ( Scheme(..), Type(..), Qualifier(..), Class(..) )
   import Language.Feather.CST.Literal ( Located(..) )
+  import Language.Feather.TypeChecker.Typed ( TypedExpression(..), TypedPattern(..), Annoted(..) )
 
   import qualified Data.Map as M
   import qualified Data.Set as S
@@ -39,6 +40,14 @@ module Language.Feather.TypeChecker.Methods where
     free (Forall v t) = free t S.\\ S.fromList (map show v)
     apply s (Forall v t) = Forall v (apply (foldr M.delete s v) t)
     
+  instance Types Qualifier where
+    free (cls :=> ty) = free cls `S.union` free ty
+    apply s (cls :=> ty) = apply s cls :=> apply s ty
+
+  instance Types Class where
+    free (IsIn _ ty) = free ty
+    apply s (IsIn cls ty) = IsIn cls $ apply s ty
+
   instance Types a => Types (Maybe a) where
     free = maybe S.empty free
     apply s = fmap (apply s)
@@ -53,3 +62,28 @@ module Language.Feather.TypeChecker.Methods where
   instance (Types a, Types b) => Types (a, b) where
     free (a, b) = free a `S.union` free b
     apply s (a, b) = (apply s a, apply s b)
+
+  instance Types TypedExpression where
+    free _ = undefined
+
+    apply s (EPair e1 e2) = EPair (apply s e1) (apply s e2)
+    apply s (EVariable name t) = EVariable name (apply s t)
+    apply s (EApplication e1 e2) = EApplication (apply s e1) (apply s e2)
+    apply s (EUnary op e) = EUnary op (apply s e)
+    apply s (EBinary op e1 e2) = EBinary op (apply s e1) (apply s e2)
+    apply s (EAbstraction (name :@ ty) e) = EAbstraction (name :@ apply s ty) (apply s e)
+    apply s (ELetIn name e1 e2) = ELetIn name (apply s e1) (apply s e2)
+    apply s (EIf e1 e2 e3) = EIf (apply s e1) (apply s e2) (apply s e3)
+    apply s (ECase e cases) = ECase (apply s e) (map (apply s) cases)
+    apply s (EStructure name tys fields next) = EStructure name (apply s tys) (apply s fields) (apply s next)
+    apply _ x = x
+
+  instance Types TypedPattern where
+    free _ = undefined
+    apply s (PVariable name ty) = PVariable name (apply s ty)
+    apply s (PApp e1 e2) = PApp (apply s e1) (apply s e2)
+    apply _ x = x
+
+  instance Types a => Types (Annoted b a) where
+    free (_ :@ a) = free a
+    apply s (name :@ a) = name :@ apply s a
