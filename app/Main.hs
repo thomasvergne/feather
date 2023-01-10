@@ -1,6 +1,6 @@
 module Main where
   import Language.Feather.Parser.Parser
-  import Language.Feather.Pretty.AST ()
+  import Language.Feather.Pretty.Typed ()
   import Language.Feather.AST.Transform
   import Language.Feather.TypeChecker.Checker
 
@@ -15,4 +15,4 @@ module Main where
         let ast'' = runChecker ast'
         case ast'' of
           Left err -> print err
-          Right ast' -> print ast'
+          Right ast -> print ast
