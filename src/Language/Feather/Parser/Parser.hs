@@ -18,14 +18,22 @@ module Language.Feather.Parser.Parser where
     ( patternExpression )
   import Language.Feather.Parser.Modules.Declaration
     ( declaration )
-
+  
   parseFeather :: String -> String -> Either P.ParseError [Located Expression]
-  parseFeather file x = L.runAssoc (P.runParserT (P.sepEndBy parser (P.optionMaybe L.semi) <* P.eof) () file x)
+  parseFeather file x = L.runAssoc $ (P.runParserT (P.sepEndBy parser (P.optionMaybe L.semi) <* P.eof) () file x)
 
   parser :: Monad m => L.Feather m Expression
-  parser = (L.whiteSpace *> expression)
+  parser = (L.whiteSpace *> topLevel)
 
   -- Expression parsing
+
+  topLevel :: Monad m => L.Feather m Expression
+  topLevel =  infixExpression
+          <|> structure
+          <|> class'
+          <|> inherit
+          <|> letExpression'
+          <|> expression
 
   expression :: Monad m => L.Feather m Expression
   expression = do
@@ -34,15 +42,40 @@ module Language.Feather.Parser.Parser where
 
   term :: Monad m => L.Feather m Expression
   term =  L.parens expression
-      <|> infixExpression
-      <|> structure
       <|> matchWith
       <|> literal
       <|> variable
       <|> abstraction
       <|> condition
       <|> P.try letInExpression'
-      <|> letExpression'
+
+  class' :: Monad m => L.Feather m Expression
+  class' = do
+    s <- P.getPosition
+    L.reserved "class"
+    name <- L.identifier
+    decl <- P.char '\'' *> L.identifier
+    decls <- some $ L.reservedOp "|" *> do
+      name' <- L.identifier
+      tys <- P.many (P.char '\'' *> L.identifier)
+      L.reservedOp ":"
+      ty <- declaration
+      return (name', tys, ty)
+    e <- P.getPosition
+    return $ EClass name decl decls :>: (s, e)
+
+  -- Type inheritance parsing
+
+  inherit :: Monad m => L.Feather m Expression
+  inherit = do
+    s <- P.getPosition
+    L.reserved "inherit"
+    name <- L.identifier
+    decl <- declaration
+    supers <- P.option [] $ L.reserved "with" *> some ((,) <$> L.identifier <*> (P.char '\'' *> L.identifier))
+    exprs <- some $ L.reservedOp "|" *> L.locate (letExpression expression)
+    e' <- P.getPosition
+    return $ EInherit supers name decl exprs :>: (s, e')
 
   -- Structure parsing
 

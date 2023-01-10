@@ -32,7 +32,7 @@ module Language.Feather.Parser.Lexer where
               , Token.opStart         = Token.opLetter languageDef
               , Token.opLetter        = oneOf "+-*/%<>=|"
               , Token.identLetter     = alphaNum
-              , Token.reservedNames   = ["let", "where", "in", "do", "fun", "if", "then", "else", "match", "with"]
+              , Token.reservedNames   = ["let", "where", "in", "do", "fun", "if", "then", "else", "match", "with", "inherit"]
               , Token.reservedOpNames = ["+", "-", "*", "/", "%", "=", "|", ">", "<", "!", "$", "#", "&", "@", "^", ".", "?", ":", ","] }
 
   operators :: String
