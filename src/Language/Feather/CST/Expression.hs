@@ -21,6 +21,8 @@ module Language.Feather.CST.Expression where
     | EIf (Located Expression) (Located Expression) (Located Expression)
     | ECase (Located Expression) [(Located Pattern, Located Expression)]
     | EStructure String [String] [(String, Declaration)]
+    | EInherit [(String, String)] String Declaration [Located LetExpression]
+    | EClass String String [(String, [String], Declaration)]
   
   type WhereClause = [Located LetExpression]
   type GuardClause = [Located (Located Expression, Located Expression)]
