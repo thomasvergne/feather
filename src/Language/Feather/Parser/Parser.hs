@@ -7,6 +7,7 @@ module Language.Feather.Parser.Parser where
   import qualified Text.Parsec as P
   import qualified Language.Feather.Parser.Lexer as L
   import qualified Text.Parsec.Expr as E
+  import qualified Text.Parsec.Token as Token
 
   import Language.Feather.Parser.Modules.LetExpressions
     ( letExpression )
@@ -30,6 +31,7 @@ module Language.Feather.Parser.Parser where
   topLevel :: Monad m => L.Feather m Expression
   topLevel =  infixExpression
           <|> structure
+          <|> import'
           <|> class'
           <|> inherit
           <|> letExpression'
@@ -49,6 +51,18 @@ module Language.Feather.Parser.Parser where
       <|> condition
       <|> P.try letInExpression'
 
+  -- Import opening parsing
+
+  import' :: Monad m => L.Feather m Expression
+  import' = do
+    s <- P.getPosition
+    L.reserved "open"
+    name <- Token.stringLiteral L.lexer
+    e <- P.getPosition
+    return $ EOpen name :>: (s, e)
+
+  -- Class parsing
+
   class' :: Monad m => L.Feather m Expression
   class' = do
     s <- P.getPosition
@@ -56,7 +70,7 @@ module Language.Feather.Parser.Parser where
     name <- L.identifier
     decl <- P.char '\'' *> L.identifier
     decls <- some $ L.reservedOp "|" *> do
-      name' <- L.identifier
+      name' <- L.identifier <|> L.parens operators
       tys <- P.many (P.char '\'' *> L.identifier)
       L.reservedOp ":"
       ty <- declaration
