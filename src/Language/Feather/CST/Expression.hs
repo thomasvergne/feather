@@ -23,6 +23,7 @@ module Language.Feather.CST.Expression where
     | EStructure String [String] [(String, Declaration)]
     | EInherit [(String, String)] String Declaration [Located LetExpression]
     | EClass String String [(String, [String], Declaration)]
+    | EOpen String
   
   type WhereClause = [Located LetExpression]
   type GuardClause = [Located (Located Expression, Located Expression)]
