@@ -22,8 +22,6 @@ module Language.Feather.TypeChecker.Modules.InstanceResolver where
   import qualified Data.Bifunctor as B
   import qualified Data.Map as M
 
-  import Debug.Trace
-
   appify :: Class -> Type
   appify (IsIn name ty) = TApp (TId name) ty
   
@@ -92,8 +90,7 @@ module Language.Feather.TypeChecker.Modules.InstanceResolver where
   resolveInstances pos (EVariable n t@(cls :=> ty)) = do
     if not $ null cls
       then do
-        (calls, tcs, preds) <- findInstance pos cls
-        traceShowM (n, t)
+        (calls, tcs, preds) <- findInstance pos (L.nub cls)
         return (
           if not (null calls) 
             then buildCall (EVariable n ([] :=> buildFun ty (map appify cls))) calls 
@@ -120,7 +117,6 @@ module Language.Feather.TypeChecker.Modules.InstanceResolver where
     (e', tcs, cls) <- resolveInstances pos e
     let t1 = if null cls then ty else buildFun ty (map appify (L.nub cls))
     (b', tcs', cls') <- resolveInstances pos b
-    -- traceShowM (x, tcs, cls, e')
     let args = map (\(n, t) -> n :@ ([] :=> t)) $ L.nub tcs
     return (ELetIn (x :@ ([] :=> t1)) (if null tcs then e' else buildLambda args e') b', L.nub tcs', L.nub cls')
   resolveInstances pos (EIf c t e) = do
