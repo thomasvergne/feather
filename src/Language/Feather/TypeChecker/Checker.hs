@@ -24,15 +24,28 @@ module Language.Feather.TypeChecker.Checker where
   import qualified Data.List as L
   import qualified Data.Bifunctor as B
   import qualified Language.Feather.TypeChecker.Typed as T
+  import qualified Debug.Trace as D
 
   import Language.Feather.TypeChecker.Modules.InstanceResolver
-    ( resolveInstances, buildFun, tArrow, buildCall )
+    ( resolveInstances, buildFun, tArrow, buildCall, buildLambda, appify )
 
   generalize :: ReaderEnv -> Qualifier -> Scheme
   generalize env t = Forall vars t
     where vars = S.toList (S.map read $ free t S.\\ free env)
 
+  showEnvironment :: Environment -> String
+  showEnvironment m = do
+    let list = M.toList m 
+    L.intercalate "\n" (map (\(name, signature) -> 
+      name ++ ": " ++ show signature) list)
+
   checkExpression :: MonadChecker m => Located Expression -> m (T.TypedExpression, Qualifier, Substitution)
+  checkExpression (EVariable "_" :>: _) = do
+    (env, _) <- RWS.ask
+    let m = env M.\\ functions
+    D.traceM $ showEnvironment m
+    tv <- fresh
+    return (T.EVariable "_" ([] :=> tv), [] :=> tv, mempty)
   checkExpression (ELiteral literal :>: _) = do
     type' <- checkLiteral literal
     return (T.ELiteral literal, [] :=> type', mempty)
@@ -56,10 +69,11 @@ module Language.Feather.TypeChecker.Checker where
     (e1', cls1 :=> t1, s1) <- checkExpression e1
     (e2', cls2 :=> t2, s2) <- checkExpression e2
     s3 <- mgu (apply s2 t1) (t2 `tArrow` t)
-    s4 <- mguClasses cls1 cls2
-    case compose <$> s3 <*> s4 of
+    s4 <- mgu (t2 `tArrow` t) (apply s2 t1)
+    s5 <- mguClasses cls1 cls2
+    case compose <$> s5 <*> (compose <$> s4 <*> s3) of
       Left err -> E.throwError (err, Nothing, pos)
-      Right s3' -> return (T.EApplication e1' e2', apply s3' ((cls1 ++ cls2) :=> t), s1 `compose` s2 `compose` s3')
+      Right s3' -> return (apply s3' $ T.EApplication e1' e2', apply s3' ((cls1 ++ cls2) :=> t), s1 `compose` s2 `compose` s3')
   checkExpression (EUnary op e :>: pos) = do
     (e1, t, s) <- checkExpression (EApplication (EVariable op :>: pos) e :>: pos)
     case e1 of
@@ -77,14 +91,20 @@ module Language.Feather.TypeChecker.Checker where
     let env'' = M.insert variable' (Forall [] ([] :=> t)) env
     (e', cls :=> t', s) <- RWS.local (`applyTy` env'') $ checkExpression e
     return (T.EAbstraction (variable' T.:@ (apply s $ [] :=> t)) e', apply s $ cls :=> (t `tArrow` t'), s)
-  checkExpression (ELetIn variable' e1 e2 :>: _) = do
+  checkExpression (ELetIn variable' e1 e2 :>: pos) = do
     (env, c) <- RWS.ask
     t <- fresh
     let env' = M.insert variable' (Forall [] ([] :=> t)) env
-    (e1', t1, s1) <- RWS.local (`applyTy` env') $ checkExpression e1
-    let env'' = M.insert variable' (generalize (env', c) t1) env'
+    (e1', (_ :=> t'), s1) <- RWS.local (`applyTy` env') $ checkExpression e1
+
+    (e1'', tcs, cls) <- resolveInstances pos e1'
+    let t1' = [] :=> if null cls then t' else buildFun t' (map appify (L.nub cls))
+
+    let env'' = M.insert variable' (generalize (env', c) t1') env'
     (e2', t2, s2) <- RWS.local (`applyTy` env'') $ checkExpression e2
-    return (T.ELetIn (variable' T.:@ t1) e1' e2', t2, s1 `compose` s2)
+
+    let args = map (\(n, t) -> n T.:@ ([] :=> t)) $ L.nub tcs
+    return (T.ELetIn (variable' T.:@ t1') (if null tcs then e1'' else buildLambda args e1'') e2', t2, s1 `compose` s2)
   checkExpression (EIf c t e :>: pos) = do
     (e1, _ :=> t1, s1) <- checkExpression c
     (e2, t2, s2) <- checkExpression t
@@ -156,12 +176,14 @@ module Language.Feather.TypeChecker.Checker where
             -- (Maybe Type, Substitution, Env, A.TypedStatement)
             return (T.ECase pat' patterns', apply s4 t, s4)
           Left e -> E.throwError (e, Nothing, pos)
-  checkExpression (EStructure _ generics fields expr :>: _) = do
+  checkExpression (EStructure name generics fields expr :>: _) = do
     generics' <- M.fromList <$> mapM ((<$> fresh) . (,)) generics
-    let fields' = M.fromList $ map (\(n, e) -> (n, fromDeclaration e generics')) fields
+    fields' <- M.fromList <$> mapM (\(n, e) -> (n,) <$> fromDeclaration e generics') fields
+    D.traceShowM fields'
     env <- RWS.ask
     let env' = M.map (generalize env . ([] :=>)) fields'
-    RWS.local (`applyCons` env') $ checkExpression expr
+    (expr', t', s') <- RWS.local (`applyCons` env') $ checkExpression expr
+    return (T.EStructure name (M.elems $ M.map (apply s') generics') (map (\(x, t) -> x T.:@ t) $ M.toList $ M.map (apply s') fields') expr', t', s')
   checkExpression (EClass name ty decls next :>: _) = do
     generics' <- M.singleton ty <$> fresh
     let cls = IsIn name (generics' M.! ty)
@@ -169,7 +191,7 @@ module Language.Feather.TypeChecker.Checker where
 
     decls' <- mapM (\(name', args, decl) -> do
       generics'' <- M.fromList <$> mapM ((<$> fresh) . (,)) args
-      let decl' = fromDeclaration decl (generics'' `M.union` generics')
+      decl' <- fromDeclaration decl (generics'' `M.union` generics')
       return (name', decl')) decls
     
     let dataType = buildFun header (map snd decls')
@@ -189,7 +211,7 @@ module Language.Feather.TypeChecker.Checker where
   checkExpression (EInherit sups name decl body next :>: pos) = do
     generics <- M.fromList <$> mapM (\(_, x) -> (x,) <$> fresh) sups
     let superclasses = map (\(x, t) -> IsIn x (generics M.! t)) sups
-    let decl' = fromDeclaration decl generics
+    decl' <- fromDeclaration decl generics
     let header = TApp (TId name) decl'
     let cls = IsIn name decl'
 
@@ -212,7 +234,7 @@ module Language.Feather.TypeChecker.Checker where
     let name' = name ++ "$" ++ show (apply s' decl')
 
     RWS.modify $ \state -> 
-      state { instances = Instance cls name' (apply s' superclasses) : instances state }
+      state { instances = apply s' (Instance cls name' superclasses) : instances state }
     
     let (_, tys'') = unzip $ map (\case
                   preds' :=> ty -> (preds', ty)) tys
@@ -234,18 +256,18 @@ module Language.Feather.TypeChecker.Checker where
   unpackType (TApp (TApp (TId "->") a) b) = b : unpackType a
   unpackType t = [t]
 
-  fromDeclaration :: Declaration -> M.Map String Type -> Type
-  fromDeclaration DVoid _ = Void
-  fromDeclaration DInt _ = Int
-  fromDeclaration DBool _ = Bool
-  fromDeclaration DChar _ = Char
-  fromDeclaration DString _ = TApp (TId "List") Char
-  fromDeclaration DFloat _ = Float
-  fromDeclaration (DId n) _ = TId n
-  fromDeclaration (DApp d1 d2) generics = TApp (fromDeclaration d1 generics) (fromDeclaration d2 generics)
+  fromDeclaration :: MonadChecker m => Declaration -> M.Map String Type -> m Type
+  fromDeclaration DVoid _ = return $ Void
+  fromDeclaration DInt _ = return $ Int
+  fromDeclaration DBool _ = return $ Bool
+  fromDeclaration DChar _ = return $ Char
+  fromDeclaration DString _ = return $ TApp (TId "List") Char
+  fromDeclaration DFloat _ = return $ Float
+  fromDeclaration (DId n) _ = return $ TId n
+  fromDeclaration (DApp d1 d2) generics = TApp <$> (fromDeclaration d1 generics) <*> (fromDeclaration d2 generics)
   fromDeclaration (DGeneric id') generics = case M.lookup id' generics of
-    Just t -> t
-    Nothing -> error "Unbound generic"
+    Just t -> return t
+    Nothing -> fresh
 
   checkPattern :: MonadChecker m => Located Pattern -> m (T.TypedPattern, Type, Substitution, Environment)
   checkPattern (PWildcard :>: _) = do
@@ -267,10 +289,12 @@ module Language.Feather.TypeChecker.Checker where
     (e1, t1, s1, env1) <- checkPattern p1
     (e2, t2, s2, env2) <- RWS.local (`applyTy` env1) $ checkPattern p2
     t <- fresh
-    s3 <- mgu (apply s2 t1) (t2 `tArrow` t)
+    s3 <- mgu (t2 `tArrow` t) (apply s2 t1)
     case s3 of
       Left err -> E.throwError (err, Nothing, pos)
-      Right s3' -> return (T.PApp e1 e2, apply s3' t, s1 `compose` s2 `compose` s3', env1 `M.union` env2)
+      Right s3' -> do
+        let s4 = s3' `compose` s2 `compose` s1
+        return (apply s4 $ T.PApp e1 e2, apply s4 t, s4, apply s4 $ env1 `M.union` env2)
 
   checkLiteral :: MonadChecker m => Literal -> m Type
   checkLiteral (IntLit _) = return Int
@@ -295,7 +319,7 @@ module Language.Feather.TypeChecker.Checker where
       ("*", Forall [0] $ [] :=> (TVar 0 `tArrow` (TVar 0 `tArrow` TVar 0))),
       ("/", Forall [0] $ [] :=> (Float `tArrow` (Float `tArrow` Float)))
     ]
-
+  
   runChecker :: Located Expression -> Either (String, Maybe String, Position) (T.TypedExpression)
   runChecker (e :>: pos) = E.runExcept $ fst <$> RWS.evalRWST (do
     (e', _, _) <- checkExpression (e :>: pos)
