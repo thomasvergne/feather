@@ -26,3 +26,4 @@ module Language.Feather.Parser.Modules.Pattern where
   term =  L.locate (L.identifier <&> PVariable)
       <|> L.locate (L.reservedOp "_" *> return PWildcard)
       <|> L.locate (literal' <&> PLiteral)
+      <|> L.parens patternExpression
