@@ -1,10 +1,11 @@
 module Language.Feather.Parser.Lexer where
   import Text.Parsec.Token ( GenTokenParser )
-  import Text.Parsec ( alphaNum, letter, ParsecT, oneOf, getPosition )
+  import Text.Parsec ( alphaNum, letter, ParsecT, oneOf, getPosition, char )
   import Language.Feather.CST.Literal ( Located(..), Position )
   import Text.Parsec.Expr ( Assoc )
   import Control.Monad.State ( StateT, evalStateT )
   import Control.Monad.Identity ( Identity(runIdentity) )
+  import Control.Applicative ( Alternative((<|>)) )
 
   import qualified Text.Parsec.Token as Token
 
@@ -26,13 +27,13 @@ module Language.Feather.Parser.Lexer where
     Token.LanguageDef {  Token.commentStart    = "/*"
               , Token.commentEnd      = "*/"
               , Token.commentLine     = "//"
-              , Token.identStart      = letter
+              , Token.identStart      = letter <|> char '_'
               , Token.caseSensitive   = True
               , Token.nestedComments  = True
               , Token.opStart         = Token.opLetter languageDef
               , Token.opLetter        = oneOf "+-*/%<>=|"
-              , Token.identLetter     = alphaNum
-              , Token.reservedNames   = ["let", "where", "in", "do", "fun", "if", "then", "else", "match", "with", "inherit"]
+              , Token.identLetter     = alphaNum <|> oneOf "_'"
+              , Token.reservedNames   = ["let", "where", "in", "do", "fun", "if", "then", "else", "match", "with", "inherit", "class"]
               , Token.reservedOpNames = ["+", "-", "*", "/", "%", "=", "|", ">", "<", "!", "$", "#", "&", "@", "^", ".", "?", ":", ","] }
 
   operators :: String
