@@ -24,7 +24,7 @@ module Language.Feather.TypeChecker.Unification where
   mguQual (cls1 :=> t1) (cls2 :=> t2) = do
     s1 <- mgu t1 t2
     s2 <- mguClasses cls1 cls2
-    return $ compose <$> s1 <*> s2
+    return $ compose <$> s2 <*> s1
 
   mguClass :: MonadChecker m => Class -> Class -> m (Either String Substitution)
   mguClass (IsIn name1 ty1) (IsIn name2 ty2) = do
@@ -51,6 +51,7 @@ module Language.Feather.TypeChecker.Unification where
       ) (Right M.empty) ys
     
     return $ compose <$> s1 <*> s2
+
   mgu :: MonadChecker m => Type -> Type -> m (Either String Substitution)
   mgu (TVar i) t = return $ variable i t
   mgu t (TVar i) = return $ variable i t
