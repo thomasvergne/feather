@@ -9,12 +9,12 @@ module Language.Feather.Parser.Modules.LetExpressions where
   import qualified Language.Feather.Parser.Lexer as L
 
   letExpression :: Monad m => L.Feather m Expression -> L.Parser m LetExpression
-  letExpression expression =  P.try (letPatternExpression expression)
+  letExpression expression =  P.try (letExpression' expression)
+                          <|> P.try (letPatternExpression expression)
                           <|> P.try (letInfixAbsExpression expression)
                           <|> P.try (letAbsExpression expression)
                           <|> P.try (letInfixAbsClauseExpression expression)
                           <|> P.try (letAbsClauseExpression expression)
-                          <|> P.try (letExpression' expression)
 
   letExpression' :: Monad m => L.Feather m Expression -> L.Parser m LetExpression
   letExpression' expr = LetExpression <$> (L.identifier <|> L.parens operators) <*> (L.reservedOp "=" *> expr)
